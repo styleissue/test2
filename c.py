@@ -11,9 +11,11 @@ OpenAI API 키는 여러 방법으로 설정할 수 있습니다! 🔑
 🔧 API 키 설정 방법:
 1. 환경변수로 설정 (권장)
 Windows:
-cmdset OPENAI_API_KEY=your-api-key-here
+cmd
+set OPENAI_API_KEY=your-api-key-here
 Mac/Linux:
-bashexport OPENAI_API_KEY="your-api-key-here"
+bash 
+export OPENAI_API_KEY="your-api-key-here"
 
 """
 
