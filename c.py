@@ -1,4 +1,54 @@
-import subprocess
+def continuous_mode(self, interval_minutes=10, search_query=None, test_mode=False):
+        """무제한 연속 실행 모드"""
+        mode_text = "테스트 모드" if test_mode else "일반 모드"
+        print(f"\n🔄 {mode_text} - 무제한 연속 실행 시작 (간격: {interval_minutes}분)")
+        print("Ctrl+C를 눌러 중단할 수 있습니다.")
+        
+        self.running = True
+        cycle_count = 0
+        success_count = 0
+        failed_count = 0
+        
+        try:
+            while self.running:
+                cycle_count += 1
+                print(f"\n📊 사이클 #{cycle_count} 시작")
+                
+                success = self.single_cycle(
+                    search_query=search_query,
+                    test_mode=test_mode
+                )
+                
+                if success:
+                    success_count += 1
+                    print(f"✅ 사이클 #{cycle_count} 완료")
+                else:
+                    failed_count += 1
+                    print(f"❌ 사이클 #{cycle_count} 실패")
+                
+                # 현재 상태 출력
+                success_rate = (success_count / cycle_count * 100) if cycle_count > 0 else 0
+                print(f"📈 현재 상태: {success_count}성공 / {failed_count}실패 / 성공률 {success_rate:.1f}%")
+                
+                if self.running:
+                    print(f"⏰ {interval_minutes}분 대기 중... (다음 사이클: #{cycle_count + 1})")
+                    time.sleep(interval_minutes * 60)
+                    
+        except KeyboardInterrupt:
+            print(f"\n🛑 사용자에 의해 중단되었습니다.")
+        except Exception as e:
+            print(f"\n❌ 예상치 못한 오류: {e}")
+        finally:
+            self.running = False
+            # 최종 결과 요약
+            print(f"\n{'='*60}")
+            print(f"📈 연속 실행 최종 결과")
+            print(f"{'='*60}")
+            print(f"🎯 총 실행 횟수: {cycle_count}")
+            print(f"✅ 성공한 횟수: {success_count}")
+            print(f"❌ 실패한 횟수: {failed_count}")
+            if cycle_count > 0:
+                print(f"📊 성공률: {(success_count/cycle_count*100):.1f}%")
 import time
 import os
 import threading
@@ -308,7 +358,7 @@ class AutomatedController:
         self.browser = None
         self.running = False
     
-    def check_prerequisites(self):
+    def check_prerequisites(self, test_mode=False):
         """사전 요구사항 확인"""
         print("📋 사전 요구사항 확인 중...")
         
@@ -317,8 +367,12 @@ class AutomatedController:
             print("❌ Selenium이 설치되지 않았습니다.")
             return False
         
-        # ADB 연결 확인
-        adb_ok = self.android.check_device_connection()
+        # 테스트 모드가 아닌 경우에만 ADB 확인
+        adb_ok = True
+        if not test_mode:
+            adb_ok = self.android.check_device_connection()
+        else:
+            print("🧪 테스트 모드: 안드로이드 디바이스 확인을 건너뜁니다.")
         
         # 브라우저 초기화 테스트
         try:
@@ -326,20 +380,23 @@ class AutomatedController:
             test_browser = AutoSeleniumBrowser(headless=True)
             test_browser.close_browser()
             print("✅ 브라우저 테스트 완료")
-            return adb_ok
+            return adb_ok if not test_mode else True
         except Exception as e:
             print(f"❌ 브라우저 테스트 실패: {e}")
             return False
     
-    def single_cycle(self, search_query=None, airplane_duration=5, take_screenshot=False):
+    def single_cycle(self, search_query=None, airplane_duration=5, take_screenshot=False, test_mode=False):
         """단일 사이클 실행"""
         print(f"\n{'='*60}")
-        print(f"🚀 Selenium 자동화 사이클 시작 - {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        if test_mode:
+            print(f"🧪 테스트 모드 - 브라우저만 실행 - {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            print(f"🚀 Selenium 자동화 사이클 시작 - {time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"{'='*60}")
         
         try:
             # 1. 브라우저 초기화
-            self.browser = AutoSeleniumBrowser(headless=True)
+            self.browser = AutoSeleniumBrowser(headless=not test_mode)  # 테스트 모드에서는 헤드리스 끄기
             
             # 2. 네이버 접속
             if not self.browser.visit_naver():
@@ -359,17 +416,25 @@ class AutomatedController:
             if take_screenshot:
                 self.browser.take_screenshot()
             
+            # 테스트 모드에서는 사용자가 확인할 시간 제공
+            if test_mode:
+                input("\n🔍 브라우저 창을 확인한 후 엔터를 눌러 계속하세요...")
+            
             # 6. 브라우저 종료
             self.browser.close_browser()
             
-            # 7. 비행기모드 사이클
-            airplane_success = self.android.airplane_mode_cycle(airplane_duration)
-            
-            if airplane_success:
-                print("✅ 전체 사이클 완료")
-                return True
+            # 7. 비행기모드 사이클 (테스트 모드가 아닐 때만)
+            if not test_mode:
+                airplane_success = self.android.airplane_mode_cycle(airplane_duration)
+                
+                if airplane_success:
+                    print("✅ 전체 사이클 완료")
+                    return True
+                else:
+                    print("⚠️ 비행기모드 실패, 웹 접속은 성공")
+                    return True
             else:
-                print("⚠️ 비행기모드 실패, 웹 접속은 성공")
+                print("🧪 테스트 모드 완료 - 안드로이드 기능 건너뜀")
                 return True
                 
         except Exception as e:
@@ -378,36 +443,111 @@ class AutomatedController:
                 self.browser.close_browser()
             return False
     
-    def continuous_mode(self, interval_minutes=10, search_query=None):
-        """연속 실행 모드"""
-        print(f"\n🔄 연속 실행 모드 시작 (간격: {interval_minutes}분)")
+    def repeat_cycle(self, repeat_count=1, search_query=None, airplane_duration=5, take_screenshot=False, test_mode=False, interval_seconds=10):
+        """지정된 횟수만큼 사이클 반복 실행"""
+        print(f"\n{'='*60}")
+        mode_text = "테스트 모드" if test_mode else "일반 모드"
+        print(f"🔄 {mode_text} - {repeat_count}회 반복 실행 시작")
+        print(f"⏰ 사이클간 간격: {interval_seconds}초")
+        print(f"{'='*60}")
+        
+        success_count = 0
+        failed_count = 0
+        
+        try:
+            for i in range(repeat_count):
+                current_cycle = i + 1
+                print(f"\n📊 {current_cycle}/{repeat_count} 사이클 시작")
+                
+                success = self.single_cycle(
+                    search_query=search_query,
+                    airplane_duration=airplane_duration,
+                    take_screenshot=take_screenshot,
+                    test_mode=test_mode
+                )
+                
+                if success:
+                    success_count += 1
+                    print(f"✅ {current_cycle}번째 사이클 성공")
+                else:
+                    failed_count += 1
+                    print(f"❌ {current_cycle}번째 사이클 실패")
+                
+                # 마지막 사이클이 아닌 경우 대기
+                if current_cycle < repeat_count:
+                    print(f"⏰ {interval_seconds}초 후 다음 사이클 시작...")
+                    time.sleep(interval_seconds)
+                    
+        except KeyboardInterrupt:
+            print(f"\n🛑 사용자에 의해 중단되었습니다.")
+        except Exception as e:
+            print(f"\n❌ 반복 실행 중 오류: {e}")
+        finally:
+            # 결과 요약
+            print(f"\n{'='*60}")
+            print(f"📈 반복 실행 결과 요약")
+            print(f"{'='*60}")
+            print(f"🎯 요청된 횟수: {repeat_count}")
+            print(f"✅ 성공한 횟수: {success_count}")
+            print(f"❌ 실패한 횟수: {failed_count}")
+            print(f"📊 성공률: {(success_count/max(success_count+failed_count, 1)*100):.1f}%")
+            
+            if test_mode:
+                print(f"🧪 테스트 모드로 실행됨 (안드로이드 기능 제외)")
+            
+            return success_count, failed_count
+    
+    def continuous_mode(self, interval_minutes=10, search_query=None, test_mode=False):
+        """무제한 연속 실행 모드"""
+        mode_text = "테스트 모드" if test_mode else "일반 모드"
+        print(f"\n🔄 {mode_text} - 무제한 연속 실행 시작 (간격: {interval_minutes}분)")
         print("Ctrl+C를 눌러 중단할 수 있습니다.")
         
         self.running = True
         cycle_count = 0
+        success_count = 0
+        failed_count = 0
         
         try:
             while self.running:
                 cycle_count += 1
                 print(f"\n📊 사이클 #{cycle_count} 시작")
                 
-                success = self.single_cycle(search_query)
+                success = self.single_cycle(
+                    search_query=search_query,
+                    test_mode=test_mode
+                )
                 
                 if success:
+                    success_count += 1
                     print(f"✅ 사이클 #{cycle_count} 완료")
                 else:
+                    failed_count += 1
                     print(f"❌ 사이클 #{cycle_count} 실패")
+                
+                # 현재 상태 출력
+                success_rate = (success_count / cycle_count * 100) if cycle_count > 0 else 0
+                print(f"📈 현재 상태: {success_count}성공 / {failed_count}실패 / 성공률 {success_rate:.1f}%")
                 
                 if self.running:
                     print(f"⏰ {interval_minutes}분 대기 중... (다음 사이클: #{cycle_count + 1})")
                     time.sleep(interval_minutes * 60)
                     
         except KeyboardInterrupt:
-            print(f"\n🛑 사용자에 의해 중단되었습니다. (총 {cycle_count}회 실행)")
+            print(f"\n🛑 사용자에 의해 중단되었습니다.")
         except Exception as e:
             print(f"\n❌ 예상치 못한 오류: {e}")
         finally:
             self.running = False
+            # 최종 결과 요약
+            print(f"\n{'='*60}")
+            print(f"📈 연속 실행 최종 결과")
+            print(f"{'='*60}")
+            print(f"🎯 총 실행 횟수: {cycle_count}")
+            print(f"✅ 성공한 횟수: {success_count}")
+            print(f"❌ 실패한 횟수: {failed_count}")
+            if cycle_count > 0:
+                print(f"📊 성공률: {(success_count/cycle_count*100):.1f}%")
 
 def install_requirements():
     """필요한 라이브러리 자동 설치"""
@@ -447,69 +587,176 @@ def main():
     
     controller = AutomatedController()
     
-    # 사전 요구사항 확인
-    if not controller.check_prerequisites():
-        print("\n❌ 사전 요구사항을 만족하지 않습니다.")
-        return
-    
     while True:
         print("\n" + "="*60)
         print("🎯 Selenium 자동화 모드 선택")
         print("="*60)
-        print("1. 단일 실행 (기본)")
-        print("2. 단일 실행 + 스크린샷")
-        print("3. 연속 실행 모드")
-        print("4. 비행기모드만 테스트")
-        print("5. 브라우저만 테스트")
+        print("1. 단일 실행 (일반 모드)")
+        print("2. 단일 실행 (테스트 모드 - 안드로이드 제외)")
+        print("3. 반복 실행 (일반 모드)")
+        print("4. 반복 실행 (테스트 모드 - 안드로이드 제외)")
+        print("5. 무제한 연속 실행 (일반 모드)")
+        print("6. 무제한 연속 실행 (테스트 모드 - 안드로이드 제외)")
+        print("7. 비행기모드만 테스트")
         print("0. 종료")
         
-        choice = input("\n선택하세요 (0-5): ").strip()
+        choice = input("\n선택하세요 (0-7): ").strip()
         
         if choice == "1":
+            # 단일 실행 (일반 모드)
+            if not controller.check_prerequisites(test_mode=False):
+                print("\n❌ 사전 요구사항을 만족하지 않습니다.")
+                continue
+                
             search_query = input("검색어 입력 (없으면 엔터): ").strip()
             search_query = search_query if search_query else None
             
             duration = input("비행기모드 지속시간(초, 기본값 5): ").strip()
             duration = int(duration) if duration.isdigit() else 5
             
-            controller.single_cycle(search_query, duration, False)
+            take_screenshot = input("스크린샷을 저장하시겠습니까? (y/n): ").lower() == 'y'
+            
+            controller.single_cycle(search_query, duration, take_screenshot, test_mode=False)
             
         elif choice == "2":
+            # 단일 실행 (테스트 모드)
+            print("\n🧪 테스트 모드 시작 (안드로이드 기능 제외)")
+            
+            if not controller.check_prerequisites(test_mode=True):
+                print("\n❌ 브라우저 요구사항을 만족하지 않습니다.")
+                continue
+            
+            search_query = input("검색어 입력 (없으면 엔터): ").strip()
+            search_query = search_query if search_query else None
+            
+            take_screenshot = input("스크린샷을 저장하시겠습니까? (y/n): ").lower() == 'y'
+            
+            print("\n📝 테스트 모드 정보:")
+            print("- 브라우저가 화면에 표시됩니다")
+            print("- 안드로이드 비행기모드 기능은 실행되지 않습니다")
+            
+            controller.single_cycle(search_query, 0, take_screenshot, test_mode=True)
+            
+        elif choice == "3":
+            # 반복 실행 (일반 모드)
+            if not controller.check_prerequisites(test_mode=False):
+                print("\n❌ 사전 요구사항을 만족하지 않습니다.")
+                continue
+            
+            repeat_count = input("반복 횟수 입력 (기본값 3): ").strip()
+            repeat_count = int(repeat_count) if repeat_count.isdigit() else 3
+            
             search_query = input("검색어 입력 (없으면 엔터): ").strip()
             search_query = search_query if search_query else None
             
             duration = input("비행기모드 지속시간(초, 기본값 5): ").strip()
             duration = int(duration) if duration.isdigit() else 5
             
-            controller.single_cycle(search_query, duration, True)
+            interval = input("사이클간 간격(초, 기본값 10): ").strip()
+            interval = int(interval) if interval.isdigit() else 10
             
-        elif choice == "3":
+            take_screenshot = input("스크린샷을 저장하시겠습니까? (y/n): ").lower() == 'y'
+            
+            controller.repeat_cycle(
+                repeat_count=repeat_count,
+                search_query=search_query,
+                airplane_duration=duration,
+                take_screenshot=take_screenshot,
+                test_mode=False,
+                interval_seconds=interval
+            )
+            
+        elif choice == "4":
+            # 반복 실행 (테스트 모드)
+            print("\n🧪 테스트 모드 반복 실행 (안드로이드 기능 제외)")
+            
+            if not controller.check_prerequisites(test_mode=True):
+                print("\n❌ 브라우저 요구사항을 만족하지 않습니다.")
+                continue
+            
+            repeat_count = input("반복 횟수 입력 (기본값 3): ").strip()
+            repeat_count = int(repeat_count) if repeat_count.isdigit() else 3
+            
+            search_query = input("검색어 입력 (없으면 엔터): ").strip()
+            search_query = search_query if search_query else None
+            
+            interval = input("사이클간 간격(초, 기본값 5): ").strip()
+            interval = int(interval) if interval.isdigit() else 5
+            
+            take_screenshot = input("스크린샷을 저장하시겠습니까? (y/n): ").lower() == 'y'
+            
+            # 테스트 모드에서는 사용자 확인을 건너뛸지 물어봄
+            skip_confirm = input("브라우저 확인 단계를 건너뛰시겠습니까? (y/n): ").lower() == 'y'
+            if skip_confirm:
+                print("⚠️ 브라우저 확인 단계를 건너뜁니다. 헤드리스 모드로 실행됩니다.")
+            
+            controller.repeat_cycle(
+                repeat_count=repeat_count,
+                search_query=search_query,
+                airplane_duration=0,
+                take_screenshot=take_screenshot,
+                test_mode=not skip_confirm,  # 확인 건너뛰면 헤드리스 모드
+                interval_seconds=interval
+            )
+            
+        elif choice == "5":
+            # 무제한 연속 실행 (일반 모드)
+            if not controller.check_prerequisites(test_mode=False):
+                print("\n❌ 사전 요구사항을 만족하지 않습니다.")
+                continue
+                
             search_query = input("검색어 입력 (없으면 엔터): ").strip()
             search_query = search_query if search_query else None
             
             interval = input("실행 간격(분, 기본값 10): ").strip()
             interval = int(interval) if interval.isdigit() else 10
             
-            controller.continuous_mode(interval, search_query)
+            controller.continuous_mode(interval, search_query, test_mode=False)
             
-        elif choice == "4":
+        elif choice == "6":
+            # 무제한 연속 실행 (테스트 모드)
+            print("\n🧪 테스트 모드 무제한 연속 실행 (안드로이드 기능 제외)")
+            
+            if not controller.check_prerequisites(test_mode=True):
+                print("\n❌ 브라우저 요구사항을 만족하지 않습니다.")
+                continue
+            
+            search_query = input("검색어 입력 (없으면 엔터): ").strip()
+            search_query = search_query if search_query else None
+            
+            interval = input("실행 간격(분, 기본값 5): ").strip()
+            interval = int(interval) if interval.isdigit() else 5
+            
+            print("📝 테스트 모드에서는 헤드리스로 실행됩니다.")
+            
+            controller.continuous_mode(interval, search_query, test_mode=True)
+            
+        elif choice == "7":
+            # 비행기모드만 테스트
+            if not controller.android.check_device_connection():
+                print("\n❌ 안드로이드 디바이스가 연결되지 않았습니다.")
+                continue
+                
+            repeat_count = input("반복 횟수 입력 (기본값 1): ").strip()
+            repeat_count = int(repeat_count) if repeat_count.isdigit() else 1
+            
             duration = input("비행기모드 지속시간(초, 기본값 5): ").strip()
             duration = int(duration) if duration.isdigit() else 5
             
-            controller.android.airplane_mode_cycle(duration)
+            interval = input("사이클간 간격(초, 기본값 10): ").strip()
+            interval = int(interval) if interval.isdigit() else 10
             
-        elif choice == "5":
-            try:
-                print("🔧 브라우저 테스트 중...")
-                browser = AutoSeleniumBrowser(headless=False)  # 헤드리스 끄기
-                browser.visit_naver()
-                browser.get_page_info()
+            success_count = 0
+            for i in range(repeat_count):
+                print(f"\n📱 {i+1}/{repeat_count} 비행기모드 테스트")
+                if controller.android.airplane_mode_cycle(duration):
+                    success_count += 1
                 
-                input("브라우저 창을 확인한 후 엔터를 눌러주세요...")
-                browser.close_browser()
-                
-            except Exception as e:
-                print(f"❌ 브라우저 테스트 실패: {e}")
+                if i < repeat_count - 1:  # 마지막이 아니면 대기
+                    print(f"⏰ {interval}초 후 다음 테스트...")
+                    time.sleep(interval)
+            
+            print(f"\n📊 비행기모드 테스트 결과: {success_count}/{repeat_count} 성공")
             
         elif choice == "0":
             print("👋 프로그램을 종료합니다.")
