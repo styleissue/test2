@@ -1,7 +1,7 @@
-def continuous_mode(self, interval_minutes=10, search_query=None, test_mode=False):
+def continuous_mode(self, interval_seconds=60, search_query=None, test_mode=False):
         """무제한 연속 실행 모드"""
         mode_text = "테스트 모드" if test_mode else "일반 모드"
-        print(f"\n🔄 {mode_text} - 무제한 연속 실행 시작 (간격: {interval_minutes}분)")
+        print(f"\n🔄 {mode_text} - 무제한 연속 실행 시작 (간격: {interval_seconds}초)")
         print("Ctrl+C를 눌러 중단할 수 있습니다.")
         
         self.running = True
@@ -31,8 +31,8 @@ def continuous_mode(self, interval_minutes=10, search_query=None, test_mode=Fals
                 print(f"📈 현재 상태: {success_count}성공 / {failed_count}실패 / 성공률 {success_rate:.1f}%")
                 
                 if self.running:
-                    print(f"⏰ {interval_minutes}분 대기 중... (다음 사이클: #{cycle_count + 1})")
-                    time.sleep(interval_minutes * 60)
+                    print(f"⏰ {interval_seconds}초 대기 중... (다음 사이클: #{cycle_count + 1})")
+                    time.sleep(interval_seconds)
                     
         except KeyboardInterrupt:
             print(f"\n🛑 사용자에 의해 중단되었습니다.")
@@ -708,8 +708,8 @@ def main():
             search_query = input("검색어 입력 (없으면 엔터): ").strip()
             search_query = search_query if search_query else None
             
-            interval = input("실행 간격(분, 기본값 10): ").strip()
-            interval = int(interval) if interval.isdigit() else 10
+            interval = input("실행 간격(초, 기본값 60): ").strip()
+            interval = int(interval) if interval.isdigit() else 60
             
             controller.continuous_mode(interval, search_query, test_mode=False)
             
@@ -724,8 +724,8 @@ def main():
             search_query = input("검색어 입력 (없으면 엔터): ").strip()
             search_query = search_query if search_query else None
             
-            interval = input("실행 간격(분, 기본값 5): ").strip()
-            interval = int(interval) if interval.isdigit() else 5
+            interval = input("실행 간격(초, 기본값 30): ").strip()
+            interval = int(interval) if interval.isdigit() else 30
             
             print("📝 테스트 모드에서는 헤드리스로 실행됩니다.")
             
